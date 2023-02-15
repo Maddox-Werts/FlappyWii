@@ -1,6 +1,7 @@
 // Includes
 /// System
 #include <stdlib.h>
+#include <math.h>
 /// Wii
 #include <wiiuse/wpad.h>
 /// GRRLIB
@@ -17,65 +18,28 @@
 #define PIPE_SPEED 5
 #define PIPE_SPACE 70
 
+#define BIRD_GRAV 0.2f
+#define BIRD_POWER 8
+
 // Variables
 u32 wpad_input;
+float game_time = 0;
+int screen = 0;
+int birdPresses = false;
 bool running = true;
+bool dead = false;
 
 // Classes
-class Bird{
-private:
-  // Variables
-  float x, y;
-  float vx, vy;
-  float r;
-
-  GRRLIB_texImg* sprite;
-
-public:
-  // Constructor
-  Bird(){
-
-    // Creating image
-    sprite = GRRLIB_LoadTexture(bird_png);
-
-    // Setting X and Y
-    x = SCR_WIDTH / 4;
-    y = 0;
-
-    // Setting velocity
-    vx = 0;
-    vy = 0;
-
-    // Setting rotation
-    r = 0;
-  }
-
-  // Functions
-  void move(){
-    // Falling
-    vy += 0.1f;
-    y += vy;
-
-    // Rotation
-    r = r+0.1f*((vy * 5)-r);
-
-    // Flapping
-    if(wpad_input & WPAD_BUTTON_A){
-      vy = -5;
-    }
-  }
-  void draw(){
-    GRRLIB_DrawImg(x, y, sprite, r, 3, 3, 0xFFFFFFFF);
-  }
-};
 class Pipe{
 private:
   // Variables
-  float x, y;
   float bodyLength;
   GRRLIB_texImg* sprite;
 
 public:
+  // Variables
+  float x, y;
+
   // Constructor
   Pipe(int offset){
     // Loading texture
@@ -84,7 +48,7 @@ public:
 
     // Setting position
     x = SCR_WIDTH + 32 + (offset * 64 * 6);
-    y = rand() * (SCR_HEIGHT / 2);
+    y = 1 * (SCR_HEIGHT / 2);
 
     // What's our length?
     bodyLength = 5;
@@ -92,6 +56,9 @@ public:
 
   // Functions
   void move(){
+    // Dead?
+    if(dead) {return;}
+
     // Moving
     x -= PIPE_SPEED;
 
@@ -122,6 +89,91 @@ public:
     
   }
 };
+class Bird{
+private:
+  // Variables
+  float x, y;
+  float vx, vy;
+  float ft;
+  float r;
+
+  GRRLIB_texImg* sprite;
+
+public:
+  // Constructor
+  Bird(){
+
+    // Creating image
+    sprite = GRRLIB_LoadTexture(bird_png);
+    GRRLIB_InitTileSet(sprite, 16,16, 0);
+
+    // Setting X and Y
+    x = SCR_WIDTH / 4;
+    y = 0;
+
+    // Setting velocity
+    vx = 0;
+    vy = 0;
+
+    // Setting rotation
+    r = 0;
+  }
+
+  // Functions
+  void falling(){
+    // Falling
+    vy += BIRD_GRAV;
+    y += vy;
+
+    // Rotation
+    r = r+0.1f*((vy * 5)-r);
+  }
+  void hover(){
+    y = (sinf(game_time) * 10) + (SCR_HEIGHT / 2);
+  }
+  void move(){
+    // Dead?
+    if(dead){
+      if(y < SCR_HEIGHT - 48){
+        falling();
+      }
+      else{
+        vy = 0;
+      }
+      return;
+    }
+    
+    // Falling
+    falling();
+
+    // Flapping
+    if((wpad_input & WPAD_BUTTON_A)
+    && birdPresses > 1){
+      vy = -BIRD_POWER;
+    }
+
+    // Inc Bird Presses
+    birdPresses++;
+  }
+  void draw(){
+    //GRRLIB_DrawImg(x, y, sprite, r, 3, 3, 0xFFFFFFFF);
+    GRRLIB_DrawTile(x,y, sprite, r, 3,3, 0xFFFFFFFF, 0);
+  }
+  void die(){
+    if(dead) {return;}
+
+    dead = true;
+    vy = 0;
+  }
+  void collide(Pipe& pipe){
+    if(x + 48 > pipe.x
+    && x < pipe.x + 32
+    && (y + 48 > pipe.y + PIPE_SPACE
+    || y < pipe.y - PIPE_SPACE)){
+      die();
+    }
+  }
+};
 
 // Functions
 /// System
@@ -149,6 +201,17 @@ int update(){
   // Exit
   return 0;
 }
+/// Game
+int restart(){
+  if(!dead) {return 0;}
+
+  if(wpad_input & WPAD_BUTTON_A){
+    birdPresses = 0;
+    dead = false;
+    return 1;
+  }
+  return 0;
+}
 
 // Entry point
 int main(int argc, char **argv) {
@@ -164,17 +227,41 @@ int main(int argc, char **argv) {
   while(running) {
     // Update
     update();
-
-    // Game code..
-    bird.move();
-    for(int i = 0; i < 2; i++){
-      pipes[i].move();
+    if(restart()){
+      bird = Bird();
+      pipes[0] = Pipe(0);
+      pipes[1] = Pipe(1);
     }
 
-    // Render code..
-    bird.draw();
-    for(int i = 0; i < 2; i++){
-      pipes[i].draw();
+    // Screens?
+    switch(screen){
+    case 0:   // Bird waiting to launch
+      // Game code..
+      game_time += 0.1f;
+      bird.hover();
+
+      /// Switching scenes
+      if(wpad_input & WPAD_BUTTON_A){
+        screen = 1;
+      }
+
+      // Render code..
+      bird.draw();
+      break;
+    case 1:   // Launching!
+      // Game code..
+      bird.move();
+      for(int i = 0; i < 2; i++){
+        bird.collide(pipes[i]);
+        pipes[i].move();
+      }
+
+      // Render code..
+      bird.draw();
+      for(int i = 0; i < 2; i++){
+        pipes[i].draw();
+      }
+      break;
     }
 
     // Render the frame buffer to the screen
