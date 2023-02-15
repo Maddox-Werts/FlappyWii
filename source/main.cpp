@@ -10,16 +10,22 @@
 // Images
 #include "bird_png.h"
 #include "pipes_png.h"
+#include "background_png.h"
+#include "ground_png.h"
 
 // Constants
 #define SCR_WIDTH 640
 #define SCR_HEIGHT 480
 
-#define PIPE_SPEED 5
-#define PIPE_SPACE 70
+#define PIPE_SPEED 2.5f
+#define PIPE_SPACE 75
+#define PIPE_CHANCE 150
 
-#define BIRD_GRAV 0.2f
+#define BIRD_GRAV 0.4f
 #define BIRD_POWER 8
+#define BIRD_SIZE 2
+
+#define CHNK_SIZE 5
 
 // Variables
 u32 wpad_input;
@@ -48,13 +54,18 @@ public:
 
     // Setting position
     x = SCR_WIDTH + 32 + (offset * 64 * 6);
-    y = 1 * (SCR_HEIGHT / 2);
 
     // What's our length?
     bodyLength = 5;
+    newHeight();
   }
 
   // Functions
+  void newHeight(){
+    // Random value
+    float randomHeightModi = ((float)(rand() % 10)) / 10.0f;
+    y = (randomHeightModi * PIPE_CHANCE) + (SCR_HEIGHT / 2) - (PIPE_CHANCE / 2);
+  }
   void move(){
     // Dead?
     if(dead) {return;}
@@ -65,6 +76,7 @@ public:
     // Tiling
     if(x < -64){
       x = SCR_WIDTH + 32;
+      newHeight();
     }
   }
   void draw(){
@@ -86,7 +98,7 @@ public:
     for(int i = 0; i < bodyLength; i++){
       GRRLIB_DrawTile(x,y+(58*(i+1)) + PIPE_SPACE, sprite, 0, 2,2, 0xFFFFFFFF, 6);
     }
-    
+
   }
 };
 class Bird{
@@ -94,9 +106,10 @@ private:
   // Variables
   float x, y;
   float vx, vy;
-  float ft;
+  float frame_time;
   float r;
 
+  int frame;
   GRRLIB_texImg* sprite;
 
 public:
@@ -117,6 +130,10 @@ public:
 
     // Setting rotation
     r = 0;
+
+    // Setting frame stuff
+    frame_time = 0;
+    frame = 0;
   }
 
   // Functions
@@ -126,7 +143,12 @@ public:
     y += vy;
 
     // Rotation
-    r = r+0.1f*((vy * 5)-r);
+    if(vy > 0){   // Down
+      r = r+0.125f*((vy * 6)-r);
+    }
+    else{         // Up
+      r = -25;
+    }
   }
   void hover(){
     y = (sinf(game_time) * 10) + (SCR_HEIGHT / 2);
@@ -134,15 +156,16 @@ public:
   void move(){
     // Dead?
     if(dead){
-      if(y < SCR_HEIGHT - 48){
+      if(y < SCR_HEIGHT - (16 * BIRD_SIZE)){
         falling();
       }
       else{
         vy = 0;
+        y = SCR_HEIGHT - (16 * BIRD_SIZE);
       }
       return;
     }
-    
+
     // Falling
     falling();
 
@@ -150,14 +173,44 @@ public:
     if((wpad_input & WPAD_BUTTON_A)
     && birdPresses > 1){
       vy = -BIRD_POWER;
+      frame = 3;
+    }
+
+    // Fell into ground?
+    if(y + (16 * BIRD_SIZE) > SCR_HEIGHT - 32){
+      die();
     }
 
     // Inc Bird Presses
     birdPresses++;
   }
   void draw(){
-    //GRRLIB_DrawImg(x, y, sprite, r, 3, 3, 0xFFFFFFFF);
-    GRRLIB_DrawTile(x,y, sprite, r, 3,3, 0xFFFFFFFF, 0);
+    // Switch frame?
+    switch(screen){
+    case 0:     // Waiting for bird to launch
+      if(frame_time > 1.5f){
+        frame_time = 0;
+        if(frame >= 3)  {frame = 0;}
+        else            {frame += 1;}
+      }
+      else{
+        frame_time += 0.1f;
+      }
+      break;
+    case 1:     // Launching!
+      if(frame_time > 0.5f){
+        frame_time = 0;
+        if(frame > 0)   {frame--;}
+        else            {frame = 0;}
+      }
+      else{
+        frame_time += 0.1f;
+      }
+      break;
+    }
+
+    // Drawing
+    GRRLIB_DrawTile(x,y, sprite, r, BIRD_SIZE,BIRD_SIZE, 0xFFFFFFFF, frame);
   }
   void die(){
     if(dead) {return;}
@@ -166,12 +219,76 @@ public:
     vy = 0;
   }
   void collide(Pipe& pipe){
-    if(x + 48 > pipe.x
+    if(x + 32 > pipe.x
     && x < pipe.x + 32
-    && (y + 48 > pipe.y + PIPE_SPACE
+    && (y + 32 > pipe.y + PIPE_SPACE
     || y < pipe.y - PIPE_SPACE)){
       die();
     }
+  }
+};
+class GroundChunk{
+private:
+  // Variables
+  GRRLIB_texImg* sprite;
+
+public:
+  // Variables
+  float x;
+
+  // Constructor
+  GroundChunk(int index){
+    // Setting position
+    x = (index * 32 * CHNK_SIZE);
+
+    // Creating sprite
+    sprite = GRRLIB_LoadTexture(ground_png);
+    GRRLIB_InitTileSet(sprite, 16,16,0);
+  }
+
+  // Functions
+  void move(){
+    x -= PIPE_SPEED;
+    if(x + 32 * CHNK_SIZE <= 0){
+      x = SCR_WIDTH;
+    }
+  }
+  void draw(){
+    for(int i = 0; i < CHNK_SIZE; i++){   // Remember, 20 tiles == screen width
+      GRRLIB_DrawTile(x + i * 32,SCR_HEIGHT-32, sprite, 0, 2,2, 0xFFFFFFFF, 27);
+    }
+  }
+};
+class BackgroundChunk{
+private:
+  // Variables
+  GRRLIB_texImg* sprite;
+
+public:
+  // Variables
+  float x;
+
+  // Constructor
+  BackgroundChunk(int index){
+    // Loading texture
+    sprite = GRRLIB_LoadTexture(background_png);
+
+    // Setting position
+    x = index * 320;
+  }
+
+  // Functions
+  void move(){
+    // Moving left
+    x -= PIPE_SPEED / 2;
+
+    // Tiling
+    if(x + 320 <= 0){
+      x = SCR_WIDTH;
+    }
+  }
+  void draw(){
+    GRRLIB_DrawImg(x,0, sprite, 0, 1.25f,1.875f, 0xFFFFFFFF);
   }
 };
 
@@ -183,6 +300,9 @@ int init(){
 
   // Initialise the Wiimotes
   WPAD_Init();
+
+  // Random?
+  srand(time(NULL));
 
   // Exit
   return 0;
@@ -223,6 +343,22 @@ int main(int argc, char **argv) {
   // Create pipes
   Pipe pipes[2] = {Pipe(0), Pipe(1)};
 
+  // Background
+  BackgroundChunk backgrounds[3] = {
+    BackgroundChunk(0),
+    BackgroundChunk(1),
+    BackgroundChunk(2)
+  };
+
+  // Ground
+  GroundChunk chunks[5] = {
+    GroundChunk(0),
+    GroundChunk(1),
+    GroundChunk(2),
+    GroundChunk(3),
+    GroundChunk(4)
+  };
+
   // Game loop
   while(running) {
     // Update
@@ -231,6 +367,14 @@ int main(int argc, char **argv) {
       bird = Bird();
       pipes[0] = Pipe(0);
       pipes[1] = Pipe(1);
+      for(int i = 0; i < 5; i++) {chunks[i].x = i * 32 * CHNK_SIZE;}
+    }
+
+    // Drawing background
+    //GRRLIB_DrawImg(SCR_WIDTH/2,0, bckgrnd, 0, 1.25f,1.875f, 0xFFFFFFFF);
+    for(int i = 0; i < 3; i++){
+      if(!dead) {backgrounds[i].move();}
+      backgrounds[i].draw();
     }
 
     // Screens?
@@ -247,6 +391,7 @@ int main(int argc, char **argv) {
 
       // Render code..
       bird.draw();
+
       break;
     case 1:   // Launching!
       // Game code..
@@ -262,6 +407,12 @@ int main(int argc, char **argv) {
         pipes[i].draw();
       }
       break;
+    }
+
+    // Ground
+    for(int i = 0; i < 5; i++) {
+      if(!dead) {chunks[i].move();}
+      chunks[i].draw();
     }
 
     // Render the frame buffer to the screen
