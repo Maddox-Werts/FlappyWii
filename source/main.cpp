@@ -83,8 +83,8 @@ public:
     GRRLIB_InitTileSet(sprite, 32, 29, 0);    // 4x8 image scale
 
     // Setting position
-    x = SCR_WIDTH + 32 + offset;
-    y = SCR_HEIGHT / 2;
+    x = SCR_WIDTH + 32 + (offset * 64 * 6);
+    y = rand() * (SCR_HEIGHT / 2);
 
     // What's our length?
     bodyLength = 5;
@@ -167,13 +167,13 @@ int main(int argc, char **argv) {
 
     // Game code..
     bird.move();
-    for(int i = 0; i < sizeof(pipes); i++){
+    for(int i = 0; i < 2; i++){
       pipes[i].move();
     }
 
     // Render code..
     bird.draw();
-    for(int i = 0; i < sizeof(pipes); i++){
+    for(int i = 0; i < 2; i++){
       pipes[i].draw();
     }
 
