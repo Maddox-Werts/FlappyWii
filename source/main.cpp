@@ -13,11 +13,16 @@
 #define SCR_WIDTH 640
 #define SCR_HEIGHT 480
 
+// Variables
+u32 wpad_input;
+bool running = true;
+
 // Classes
 class Bird{
 private:
   // Variables
   float x, y;
+  float vx, vy;
   float r;
 
   GRRLIB_texImg* sprite;
@@ -29,8 +34,12 @@ public:
     sprite = GRRLIB_LoadTexture(bird_png);
 
     // Setting X and Y
-    x = 0;
+    x = SCR_WIDTH / 4;
     y = 0;
+
+    // Setting velocity
+    vx = 0;
+    vy = 0;
 
     // Setting rotation
     r = 0;
@@ -38,15 +47,22 @@ public:
 
   // Functions
   void move(){
+    // Falling
+    vy += 0.1f;
+    y += vy;
 
+    // Rotation
+    r = r+0.1f*((vy * 5)-r);
+
+    // Flapping
+    if(wpad_input & WPAD_BUTTON_A){
+      vy = -5;
+    }
   }
   void draw(){
     GRRLIB_DrawImg(x, y, sprite, r, 3, 3, 0xFFFFFFFF);
   }
 };
-
-// Variables
-bool running = true;
 
 // Functions
 /// System
@@ -65,8 +81,11 @@ int update(){
   WPAD_ScanPads();
   WPAD_SetVRes(0, SCR_WIDTH, SCR_HEIGHT);
 
+  // Get input
+  wpad_input = WPAD_ButtonsDown(0);
+
   // If [HOME] was pressed on the first Wiimote, break out of the loop
-  if (WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME) {running = false;}
+  if (wpad_input & WPAD_BUTTON_HOME) {running = false;}
 
   // Exit
   return 0;
