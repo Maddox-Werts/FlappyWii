@@ -8,6 +8,7 @@
 
 // Images
 #include "bird_png.h"
+#include "pipes_png.h"
 
 // Constants
 #define SCR_WIDTH 640
@@ -63,6 +64,34 @@ public:
     GRRLIB_DrawImg(x, y, sprite, r, 3, 3, 0xFFFFFFFF);
   }
 };
+class Pipe{
+private:
+  // Variables
+  float x, y;
+  GRRLIB_texImg* sprite;
+
+public:
+  // Constructor
+  Pipe(int offset){
+    // Loading texture
+    sprite = GRRLIB_LoadTexture(pipes_png);
+    GRRLIB_InitTileSet(sprite, 32, 29, 0);    // 4x8 image scale
+
+    // Setting position
+    x = 50;
+    y = 50;
+  }
+
+  // Functions
+  void move(){
+
+  }
+  void draw(){
+    // Drawing
+    //GRRLIB_DrawImg(x,y, sprite, 0, 1,1, 0xFFFFFFFF);
+    GRRLIB_DrawTile(x,y, sprite, 0, 1,1, 0xFFFFFFFF, 2*1);
+  }
+};
 
 // Functions
 /// System
@@ -98,6 +127,9 @@ int main(int argc, char **argv) {
   // Create bird
   Bird bird;
 
+  // Create pipes
+  Pipe pipe(0);
+
   // Game loop
   while(running) {
     // Update
@@ -105,9 +137,11 @@ int main(int argc, char **argv) {
 
     // Game code..
     bird.move();
+    pipe.move();
 
     // Render code..
     bird.draw();
+    pipe.draw();
 
     // Render the frame buffer to the screen
     GRRLIB_Render();
